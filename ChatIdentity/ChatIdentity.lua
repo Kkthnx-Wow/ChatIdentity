@@ -16,7 +16,7 @@ local UnitSex = UnitSex
 
 -- Static table to store member data (race, gender, class, and level)
 local memberData = {}
-local debugMode = false
+local debugMode = true
 local lastGuildRosterUpdate = 0
 
 -- Access settings dynamically
@@ -158,18 +158,17 @@ local function AddRaceIconToChat(_, _, message, sender, ...)
 	local playerData = memberData[playerName]
 
 	if playerData then
-		DebugPrint("Player data found for: " .. playerName .. " - Race: " .. playerData.race .. ", Gender: " .. playerData.sex)
+		DebugPrint("Player data found for: " .. playerName .. " - Race: " .. playerData.race .. ", Class: " .. playerData.class .. ", Level: " .. playerData.level)
 		local raceIcon = GetRaceIcon(playerData.race, playerData.sex)
 		local classIcon = GetClassIcon(playerData.class)
+
+		-- Ensure level string is generated properly
 		local levelString = GetLevelString(UnitLevel("player"), playerData.level)
-
-		if not raceIcon then
-			DebugPrint("No race icon generated for: " .. playerName)
-		end
-		if not classIcon then
-			DebugPrint("No class icon generated for: " .. playerName)
+		if not levelString then
+			levelString = GetLevelColor(playerData.level) .. "[" .. playerData.level .. "]|r" -- Fallback level string
 		end
 
+		-- Build the message prefix
 		local prefix = ""
 		local order = SplitString(GetOption("displayOrder"), ",")
 		for _, element in ipairs(order) do
@@ -182,6 +181,7 @@ local function AddRaceIconToChat(_, _, message, sender, ...)
 			end
 		end
 
+		-- Combine prefix and message
 		local modifiedMessage = prefix .. message
 		DebugPrint("Modified message: " .. modifiedMessage)
 		return false, modifiedMessage, sender, ...
@@ -192,9 +192,57 @@ local function AddRaceIconToChat(_, _, message, sender, ...)
 	return false, message, sender, ...
 end
 
-namespace:RegisterEvent("PLAYER_LOGIN", function()
-	InitializePlayerData()
-	namespace:Print("ChatIdentity loaded and ready!")
+namespace:RegisterEvent("ADDON_LOADED", function(_, addonName)
+	if addonName == "ChatIdentity" then
+		-- Initialization
+		DebugPrint("ADDON_LOADED fired for ChatIdentity. Initializing addon.")
+		InitializePlayerData()
+
+		-- Request guild information if the player is in a guild
+		if IsInGuild() then
+			DebugPrint("Player is in a guild. Requesting guild roster update.")
+			C_GuildInfo.GuildRoster()
+		else
+			DebugPrint("Player is not in a guild. Skipping guild roster request.")
+		end
+
+		-- Get player's data for the message
+		local playerName = UnitName("player")
+		local playerClass, classFileName = UnitClass("player") -- Class and internal class file name
+		local playerRace = UnitRace("player")
+		local playerSex = UnitSex("player") -- Used for gendered race icons
+
+		-- Generate race and class icons
+		local raceIcon = GetRaceIcon(playerRace, playerSex) or ""
+		local classIcon = GetClassIcon(playerClass) or ""
+
+		-- Fetch class color
+		local classColor = RAID_CLASS_COLORS[classFileName]
+		local classColorCode = string.format("|cff%02x%02x%02x", classColor.r * 255, classColor.g * 255, classColor.b * 255)
+
+		-- Fetch version and assign a distinct color (gold-like)
+		local version = C_AddOns.GetAddOnMetadata("ChatIdentity", "Version") or "Unknown Version"
+		local versionColor = "|cffffd700" -- Gold-like color for version number
+
+		-- Confirm addon is ready with personalized message
+		namespace:Print(string.format(
+			"%sv%s|r loaded! Welcome, %s%s|r %s %s.\nType %s/chatidentity%s or %s/ci%s for options.",
+			versionColor,
+			version, -- Colored version number
+			classColorCode,
+			playerName, -- Class name with color
+			raceIcon, -- Race icon
+			classIcon, -- Class icon
+			"|cff00ff00", -- Green color for "/chatidentity"
+			"|r", -- Reset color
+			"|cff00ff00", -- Green color for "/ci"
+			"|r" -- Reset color
+		))
+
+		-- Unregister ADDON_LOADED to avoid unnecessary calls
+		namespace:UnregisterEvent("ADDON_LOADED", namespace.ADDON_LOADED)
+		DebugPrint("ADDON_LOADED event unregistered.")
+	end
 end)
 
 namespace:RegisterEvent("CHAT_MSG_GUILD", function(_, ...)
@@ -275,31 +323,31 @@ namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
 end)
 
 namespace:RegisterEvent("UNIT_LEVEL", function(_, unit)
-	if not unit or not UnitExists(unit) then
-		DebugPrint("UNIT_LEVEL event fired, but unit does not exist.")
+	if unit == "player" then
+		DebugPrint("UNIT_LEVEL ignored for player: " .. tostring(UnitName(unit)))
+		return
+	end
+
+	if not UnitInParty(unit) then
+		DebugPrint("UNIT_LEVEL ignored for unit not in party: " .. tostring(UnitName(unit)))
 		return
 	end
 
 	namespace:Defer(function()
-		-- Only process if the unit is part of the player's party
-		if UnitInParty(unit) then
-			local name = UnitName(unit)
-			local level = UnitLevel(unit)
+		local name = UnitName(unit)
+		local level = UnitLevel(unit)
 
-			if name and level then
-				DebugPrint("UNIT_LEVEL fired for party member: " .. name .. ", Level: " .. level)
-				-- Update level in memberData if it has changed
-				if memberData[name] and memberData[name].level ~= level then
-					memberData[name].level = level
-					DebugPrint("Updated level for " .. name .. ": " .. level)
-				else
-					DebugPrint("No changes required for " .. name)
-				end
+		if name and level then
+			DebugPrint("UNIT_LEVEL fired for party member: " .. name .. ", Level: " .. level)
+			-- Update level in memberData if it has changed
+			if memberData[name] and memberData[name].level ~= level then
+				memberData[name].level = level
+				DebugPrint("Updated level for " .. name .. ": " .. level)
 			else
-				DebugPrint("UNIT_LEVEL fired but no valid name or level for unit.")
+				DebugPrint("No changes required for " .. name)
 			end
 		else
-			DebugPrint("UNIT_LEVEL ignored for unit not in party: " .. tostring(UnitName(unit)))
+			DebugPrint("UNIT_LEVEL fired but no valid name or level for unit.")
 		end
 	end)
 end)
@@ -322,7 +370,7 @@ namespace:RegisterEvent("PLAYER_LEVEL_UP", function(_, level, healthDelta, power
 		}
 	end
 
-	-- Optional: Perform additional updates or display messages
+	-- Notify the player
 	namespace:Print("Congratulations on reaching level " .. level .. "!")
 end)
 
@@ -330,13 +378,21 @@ end)
 namespace:RegisterEvent("PLAYER_LEVEL_CHANGED", function(_, oldLevel, newLevel, real)
 	local playerName = UnitName("player")
 	if playerName and memberData[playerName] then
-		-- Update player's level in memberData
-		memberData[playerName].level = newLevel
-
-		-- Debugging output
-		DebugPrint(string_format("Player level changed: %s - Old Level: %d, New Level: %d, Real: %s", playerName, oldLevel, newLevel, tostring(real)))
+		-- Prevent duplicate updates if PLAYER_LEVEL_UP already handled it
+		if memberData[playerName].level ~= newLevel then
+			memberData[playerName].level = newLevel
+			DebugPrint(string_format("Player level changed: %s - Old Level: %d, New Level: %d, Real: %s", playerName, oldLevel, newLevel, tostring(real)))
+		else
+			DebugPrint("PLAYER_LEVEL_CHANGED fired, but level already up to date.")
+		end
 	else
-		DebugPrint("PLAYER_LEVEL_CHANGED fired, but player data is not found.")
+		DebugPrint("PLAYER_LEVEL_CHANGED fired, but player data is not found. Initializing.")
+		memberData[playerName] = {
+			race = UnitRace("player"),
+			class = UnitClass("player"),
+			level = newLevel,
+			sex = UnitSex("player"),
+		}
 	end
 end)
 
