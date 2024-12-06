@@ -206,38 +206,43 @@ namespace:RegisterEvent("ADDON_LOADED", function(_, addonName)
 			DebugPrint("Player is not in a guild. Skipping guild roster request.")
 		end
 
-		-- Get player's data for the message
-		local playerName = UnitName("player")
-		local playerClass, classFileName = UnitClass("player") -- Class and internal class file name
-		local playerRace = UnitRace("player")
-		local playerSex = UnitSex("player") -- Used for gendered race icons
+		-- Check if welcome message is enabled
+		if GetOption and GetOption("showWelcomeMessage") then
+			-- Get player's data for the message
+			local playerName = UnitName("player")
+			local playerClass, classFileName = UnitClass("player") -- Class and internal class file name
+			local playerRace = UnitRace("player")
+			local playerSex = UnitSex("player") -- Used for gendered race icons
 
-		-- Generate race and class icons
-		local raceIcon = GetRaceIcon(playerRace, playerSex) or ""
-		local classIcon = GetClassIcon(playerClass) or ""
+			-- Generate race and class icons
+			local raceIcon = GetRaceIcon(playerRace, playerSex) or ""
+			local classIcon = GetClassIcon(playerClass) or ""
 
-		-- Fetch class color
-		local classColor = RAID_CLASS_COLORS[classFileName]
-		local classColorCode = string.format("|cff%02x%02x%02x", classColor.r * 255, classColor.g * 255, classColor.b * 255)
+			-- Fetch class color
+			local classColor = RAID_CLASS_COLORS[classFileName]
+			local classColorCode = string.format("|cff%02x%02x%02x", classColor.r * 255, classColor.g * 255, classColor.b * 255)
 
-		-- Fetch version and assign a distinct color (gold-like)
-		local version = C_AddOns.GetAddOnMetadata("ChatIdentity", "Version") or "Unknown Version"
-		local versionColor = "|cffffd700" -- Gold-like color for version number
+			-- Fetch version and assign a distinct color (gold-like)
+			local version = C_AddOns.GetAddOnMetadata("ChatIdentity", "Version") or "Unknown Version"
+			local versionColor = "|cffffd700" -- Gold-like color for version number
 
-		-- Confirm addon is ready with personalized message
-		namespace:Print(string.format(
-			"%sv%s|r loaded! Welcome, %s%s|r %s %s.\nType %s/chatidentity%s or %s/ci%s for options.",
-			versionColor,
-			version, -- Colored version number
-			classColorCode,
-			playerName, -- Class name with color
-			raceIcon, -- Race icon
-			classIcon, -- Class icon
-			"|cff00ff00", -- Green color for "/chatidentity"
-			"|r", -- Reset color
-			"|cff00ff00", -- Green color for "/ci"
-			"|r" -- Reset color
-		))
+			-- Display welcome message
+			namespace:Print(string.format(
+				"%sv%s|r loaded! Welcome, %s%s|r %s %s.\nType %s/chatidentity%s or %s/ci%s for options.",
+				versionColor,
+				version, -- Colored version number
+				classColorCode,
+				playerName, -- Class name with color
+				raceIcon, -- Race icon
+				classIcon, -- Class icon
+				"|cff00ff00", -- Green color for "/chatidentity"
+				"|r", -- Reset color
+				"|cff00ff00", -- Green color for "/ci"
+				"|r" -- Reset color
+			))
+		else
+			DebugPrint("Welcome message is disabled.")
+		end
 
 		-- Unregister ADDON_LOADED to avoid unnecessary calls
 		namespace:UnregisterEvent("ADDON_LOADED", namespace.ADDON_LOADED)

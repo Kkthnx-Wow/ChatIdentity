@@ -12,8 +12,8 @@
 
 # Libraries
 Libs\Dashi\embed.xml
-# Core
-ChatIdentity.lua
 # Config
 Config\Settings.lua
 Config\About.lua
+# Core
+ChatIdentity.lua

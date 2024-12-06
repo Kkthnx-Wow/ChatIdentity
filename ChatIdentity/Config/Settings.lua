@@ -54,6 +54,13 @@ namespace:RegisterSettings("ChatIdentityDB", {
 		valueStep = 1,
 		valueFormat = "%.0f", -- Display integer values
 	},
+	{
+		key = "showWelcomeMessage",
+		type = "toggle",
+		title = "Show Welcome Message",
+		tooltip = "Toggle whether to display the welcome message when the addon is loaded.",
+		default = true,
+	},
 })
 
 -- Hook slash command to open settings
