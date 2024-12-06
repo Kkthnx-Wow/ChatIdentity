@@ -1,4 +1,4 @@
-## Interface: 110005, 11505
+## Interface: 110005, 40401, 11505
 ## Name: ChatIdentity
 ## Title: |cff5bc0beChat Identity|r
 ## Notes: Forge immersive identities in chat with detailed player info.|n|n|cff669DFFDeveloper|cffffffff:|r |nJosh "|CFF7b8489Kkthnx|r" Russell|n|n|cff009cdePayPal|r|cffffffff:|r |n|cffffffffwww.paypal.me/KkthnxTV|r|n|n|cfff96854Patreon|r|cffffffff:|r |n|cffffffffwww.patreon.com/Kkthnx|r
