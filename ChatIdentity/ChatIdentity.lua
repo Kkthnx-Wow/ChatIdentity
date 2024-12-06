@@ -18,8 +18,12 @@ local function DebugPrint(msg)
 end
 
 -- Mapping for special race names
-local raceAtlasMap = {
+local raceAtlasMap = { -- I think this is still broken? Bleh :|
+	["highmountaintauren"] = "highmountain",
+	["lightforgeddraenei"] = "lightforged",
+	["scourge"] = "undead",
 	["zandalaritroll"] = "zandalari",
+	["earthendwarf"] = "earthen",
 }
 
 -- Function to dynamically generate race icons using Atlas
@@ -32,7 +36,13 @@ local function GetRaceIcon(race, gender)
 		return nil
 	end
 
+	-- Debugging raw race input
+	DebugPrint("Raw race input: " .. race)
+
+	-- Apply mapping and sanitize
 	local sanitizedRace = raceAtlasMap[string.lower(race)] or string.gsub(string.lower(race), "%s+", "")
+	DebugPrint("Sanitized race: " .. sanitizedRace)
+
 	local genderString = (gender == 2) and "male" or (gender == 3) and "female"
 	local atlasName = "raceicon-" .. sanitizedRace .. "-" .. genderString
 
@@ -43,6 +53,7 @@ local function GetRaceIcon(race, gender)
 		return "|TInterface\\Icons\\INV_Misc_QuestionMark:" .. iconSize .. "|t"
 	end
 
+	DebugPrint("Atlas found: " .. atlasName)
 	return CreateAtlasMarkup(atlasName, iconSize, iconSize)
 end
 
@@ -98,36 +109,52 @@ end
 
 -- Detect race, gender, class, and level from visible units
 local function DetectPlayerData(sender)
-	if not sender or memberData[sender] then
-		return
-	end
+	namespace:Defer(function()
+		DebugPrint("Attempting to detect player data for: " .. tostring(sender))
+		if not sender or memberData[sender] then
+			DebugPrint("Skipping detection: No sender or data already exists for " .. tostring(sender))
+			return
+		end
 
-	local unitIds = { "player", "party1", "party2", "party3", "party4", "target", "focus", "mouseover" }
-	for _, unitId in ipairs(unitIds) do
-		if UnitExists(unitId) and UnitName(unitId) == sender then
-			local race = UnitRace(unitId)
-			local class = UnitClass(unitId)
-			local level = UnitLevel(unitId)
-			local sex = UnitSex(unitId)
+		local unitIds = { "player", "party1", "party2", "party3", "party4", "target", "focus", "mouseover" }
+		for _, unitId in ipairs(unitIds) do
+			if UnitExists(unitId) and UnitName(unitId) == sender then
+				local race = UnitRace(unitId)
+				local class = UnitClass(unitId)
+				local level = UnitLevel(unitId)
+				local sex = UnitSex(unitId)
 
-			if race and sex and class and level then
-				memberData[sender] = { race = race, class = class, level = level, sex = sex }
-				DebugPrint("Detected " .. sender .. "'s race, gender, class, and level: " .. race .. " - " .. class .. " - Level " .. level)
-				return
+				if race and sex and class and level then
+					memberData[sender] = { race = race, class = class, level = level, sex = sex }
+					DebugPrint("Detected player data: " .. sender .. " - Race: " .. race .. ", Class: " .. class .. ", Level: " .. level .. ", Gender: " .. (sex == 2 and "Male" or "Female"))
+					return
+				else
+					DebugPrint("Incomplete player data for " .. sender .. ": Race=" .. tostring(race) .. ", Class=" .. tostring(class) .. ", Level=" .. tostring(level) .. ", Gender=" .. tostring(sex))
+				end
 			end
 		end
-	end
+		DebugPrint("No unit data found for: " .. sender)
+	end)
 end
 
 -- Add race icon, class icon, and level to chat messages
 local function AddRaceIconToChat(_, _, message, sender, ...)
+	DebugPrint("Processing chat message from: " .. tostring(sender))
 	local playerName = Ambiguate(sender, "short")
 	local playerData = memberData[playerName]
 
 	if playerData then
+		DebugPrint("Player data found for: " .. playerName .. " - Race: " .. playerData.race .. ", Gender: " .. playerData.sex)
 		local raceIcon = GetRaceIcon(playerData.race, playerData.sex)
 		local classIcon = GetClassIcon(playerData.class)
 		local levelString = GetLevelString(UnitLevel("player"), playerData.level)
+
+		if not raceIcon then
+			DebugPrint("No race icon generated for: " .. playerName)
+		end
+		if not classIcon then
+			DebugPrint("No class icon generated for: " .. playerName)
+		end
 
 		local prefix = ""
 		local order = SplitString(GetOption("displayOrder"), ",")
@@ -142,9 +169,10 @@ local function AddRaceIconToChat(_, _, message, sender, ...)
 		end
 
 		local modifiedMessage = prefix .. message
+		DebugPrint("Modified message: " .. modifiedMessage)
 		return false, modifiedMessage, sender, ...
 	else
-		DebugPrint("No data found for " .. playerName)
+		DebugPrint("No data found for sender: " .. sender)
 	end
 
 	return false, message, sender, ...
@@ -152,6 +180,7 @@ end
 
 namespace:RegisterEvent("PLAYER_LOGIN", function()
 	InitializePlayerData()
+	namespace:Print("ChatIdentity loaded and ready!")
 end)
 
 namespace:RegisterEvent("CHAT_MSG_GUILD", function(event, ...)
@@ -184,39 +213,67 @@ namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
 	if now - lastGuildRosterUpdate >= 10 then
 		C_GuildInfo.GuildRoster()
 		lastGuildRosterUpdate = now
-		DebugPrint("Guild roster updated.")
+
+		local numGuildMembers = GetNumGuildMembers()
+		DebugPrint("Processing guild roster update. Number of members: " .. numGuildMembers)
+
+		for i = 1, numGuildMembers do
+			local fullName, _, _, level, classDisplayName, _, _, _, isOnline, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+			local playerName = Ambiguate(fullName, "short") -- Strip realm name
+
+			if guid then
+				local localizedClass, englishClass, localizedRace, englishRace, sex, name, realm = GetPlayerInfoByGUID(guid)
+				if localizedRace and sex then
+					memberData[playerName] = {
+						race = localizedRace, -- Localized race name
+						class = localizedClass, -- Localized class name
+						level = level,
+						sex = sex,
+					}
+					DebugPrint(string.format("Guild member: %s - Race: %s - Class: %s - Level: %s - Gender: %s", playerName, localizedRace, localizedClass, level, (sex == 2 and "Male" or "Female")))
+				else
+					DebugPrint("Failed to retrieve race or gender for GUID: " .. guid)
+				end
+			else
+				DebugPrint("Missing GUID for guild member: " .. tostring(playerName))
+			end
+		end
 	end
 end)
 
 namespace:RegisterEvent("UNIT_LEVEL", function(event, unit)
-	if UnitInParty(unit) or UnitInRaid(unit) then
-		local name = UnitName(unit)
-		local level = UnitLevel(unit)
-		if memberData[name] and memberData[name].level ~= level then
-			memberData[name].level = level
-			DebugPrint("Updated level for " .. name .. ": " .. level)
+	namespace:Defer(function()
+		if UnitInParty(unit) or UnitInRaid(unit) then
+			local name = UnitName(unit)
+			local level = UnitLevel(unit)
+			if memberData[name] and memberData[name].level ~= level then
+				memberData[name].level = level
+				DebugPrint("Updated level for " .. name .. ": " .. level)
+			end
 		end
-	end
+	end)
 end)
 
 namespace:RegisterEvent("GROUP_ROSTER_UPDATE", function()
-	DebugPrint("Group roster updated")
-	local numGroupMembers = GetNumGroupMembers()
-	for i = 1, numGroupMembers do
-		local unit = IsInRaid() and "raid" .. i or "party" .. i
-		if UnitExists(unit) then
-			local name = UnitName(unit)
-			local race = UnitRace(unit)
-			local class = UnitClass(unit)
-			local level = UnitLevel(unit)
-			local sex = UnitSex(unit)
+	namespace:Defer(function()
+		DebugPrint("Group roster updated")
+		local numGroupMembers = GetNumGroupMembers()
+		for i = 1, numGroupMembers do
+			local unit = IsInRaid() and "raid" .. i or "party" .. i
+			if UnitExists(unit) then
+				local name = UnitName(unit)
+				local race = UnitRace(unit)
+				local class = UnitClass(unit)
+				local level = UnitLevel(unit)
+				local sex = UnitSex(unit)
 
-			if name and race and class and level and sex then
-				memberData[name] = { race = race, class = class, level = level, sex = sex }
-				DebugPrint("Updated data for group member: " .. name)
+				if name and race and class and level and sex then
+					memberData[name] = { race = race, class = class, level = level, sex = sex }
+					DebugPrint("Updated data for group member: " .. name)
+				end
 			end
 		end
-	end
+	end)
 end)
 
 ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", AddRaceIconToChat)
