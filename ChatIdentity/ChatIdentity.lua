@@ -209,36 +209,38 @@ namespace:RegisterEvent("CHAT_MSG_INSTANCE_CHAT_LEADER", function(event, ...)
 end)
 
 namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
-	local now = GetTime()
-	if now - lastGuildRosterUpdate >= 10 then
-		C_GuildInfo.GuildRoster()
-		lastGuildRosterUpdate = now
+	namespace:Defer(function()
+		local now = GetTime()
+		if now - lastGuildRosterUpdate >= 10 then
+			C_GuildInfo.GuildRoster()
+			lastGuildRosterUpdate = now
 
-		local numGuildMembers = GetNumGuildMembers()
-		DebugPrint("Processing guild roster update. Number of members: " .. numGuildMembers)
+			local numGuildMembers = GetNumGuildMembers()
+			DebugPrint("Processing guild roster update. Number of members: " .. numGuildMembers)
 
-		for i = 1, numGuildMembers do
-			local fullName, _, _, level, classDisplayName, _, _, _, isOnline, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
-			local playerName = Ambiguate(fullName, "short") -- Strip realm name
+			for i = 1, numGuildMembers do
+				local fullName, _, _, level, classDisplayName, _, _, _, isOnline, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+				local playerName = Ambiguate(fullName, "short") -- Strip realm name
 
-			if guid then
-				local localizedClass, englishClass, localizedRace, englishRace, sex, name, realm = GetPlayerInfoByGUID(guid)
-				if localizedRace and sex then
-					memberData[playerName] = {
-						race = localizedRace, -- Localized race name
-						class = localizedClass, -- Localized class name
-						level = level,
-						sex = sex,
-					}
-					DebugPrint(string.format("Guild member: %s - Race: %s - Class: %s - Level: %s - Gender: %s", playerName, localizedRace, localizedClass, level, (sex == 2 and "Male" or "Female")))
+				if guid then
+					local localizedClass, englishClass, localizedRace, englishRace, sex, name, realm = GetPlayerInfoByGUID(guid)
+					if localizedRace and sex then
+						memberData[playerName] = {
+							race = localizedRace, -- Localized race name
+							class = localizedClass, -- Localized class name
+							level = level,
+							sex = sex,
+						}
+						DebugPrint(string.format("Guild member: %s - Race: %s - Class: %s - Level: %s - Gender: %s", playerName, localizedRace, localizedClass, level, (sex == 2 and "Male" or "Female")))
+					else
+						DebugPrint("Failed to retrieve race or gender for GUID: " .. guid)
+					end
 				else
-					DebugPrint("Failed to retrieve race or gender for GUID: " .. guid)
+					DebugPrint("Missing GUID for guild member: " .. tostring(playerName))
 				end
-			else
-				DebugPrint("Missing GUID for guild member: " .. tostring(playerName))
 			end
 		end
-	end
+	end)
 end)
 
 namespace:RegisterEvent("UNIT_LEVEL", function(event, unit)
