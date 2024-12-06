@@ -1,5 +1,19 @@
 local _, namespace = ...
 
+local string_format = string.format
+local string_gsub = string.gsub
+local string_lower = string.lower
+local tostring = tostring
+
+local GetGuildRosterInfo = GetGuildRosterInfo
+local GetNumGuildMembers = GetNumGuildMembers
+local GetPlayerInfoByGUID = GetPlayerInfoByGUID
+local UnitClass = UnitClass
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitRace = UnitRace
+local UnitSex = UnitSex
+
 -- Static table to store member data (race, gender, class, and level)
 local memberData = {}
 local debugMode = false
@@ -40,7 +54,7 @@ local function GetRaceIcon(race, gender)
 	DebugPrint("Raw race input: " .. race)
 
 	-- Apply mapping and sanitize
-	local sanitizedRace = raceAtlasMap[string.lower(race)] or string.gsub(string.lower(race), "%s+", "")
+	local sanitizedRace = raceAtlasMap[string_lower(race)] or string_gsub(string_lower(race), "%s+", "")
 	DebugPrint("Sanitized race: " .. sanitizedRace)
 
 	local genderString = (gender == 2) and "male" or (gender == 3) and "female"
@@ -62,7 +76,7 @@ local function GetClassIcon(class)
 	if not GetOption("enableClassIcon") then
 		return nil
 	end
-	local sanitizedClass = string.gsub(string.lower(class), "%s+", "")
+	local sanitizedClass = string_gsub(string_lower(class), "%s+", "")
 	local iconSize = GetOption("iconSize") or 18
 	return "|TInterface\\Icons\\ClassIcon_" .. sanitizedClass .. ":" .. iconSize .. "|t"
 end
@@ -70,7 +84,7 @@ end
 -- Generate difficulty color for levels
 local function GetLevelColor(level)
 	local color = GetQuestDifficultyColor(level)
-	return string.format("|cff%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
+	return string_format("|cff%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
 end
 
 -- Generate level string with difficulty color
@@ -183,27 +197,27 @@ namespace:RegisterEvent("PLAYER_LOGIN", function()
 	namespace:Print("ChatIdentity loaded and ready!")
 end)
 
-namespace:RegisterEvent("CHAT_MSG_GUILD", function(event, ...)
+namespace:RegisterEvent("CHAT_MSG_GUILD", function(_, ...)
 	local _, sender = ...
 	DetectPlayerData(Ambiguate(sender, "short"))
 end)
 
-namespace:RegisterEvent("CHAT_MSG_PARTY", function(event, ...)
+namespace:RegisterEvent("CHAT_MSG_PARTY", function(_, ...)
 	local _, sender = ...
 	DetectPlayerData(Ambiguate(sender, "short"))
 end)
 
-namespace:RegisterEvent("CHAT_MSG_PARTY_LEADER", function(event, ...)
+namespace:RegisterEvent("CHAT_MSG_PARTY_LEADER", function(_, ...)
 	local _, sender = ...
 	DetectPlayerData(Ambiguate(sender, "short"))
 end)
 
-namespace:RegisterEvent("CHAT_MSG_INSTANCE_CHAT", function(event, ...)
+namespace:RegisterEvent("CHAT_MSG_INSTANCE_CHAT", function(_, ...)
 	local _, sender = ...
 	DetectPlayerData(Ambiguate(sender, "short"))
 end)
 
-namespace:RegisterEvent("CHAT_MSG_INSTANCE_CHAT_LEADER", function(event, ...)
+namespace:RegisterEvent("CHAT_MSG_INSTANCE_CHAT_LEADER", function(_, ...)
 	local _, sender = ...
 	DetectPlayerData(Ambiguate(sender, "short"))
 end)
@@ -221,15 +235,26 @@ namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
 			C_GuildInfo.GuildRoster()
 			lastGuildRosterUpdate = now
 
-			local numGuildMembers = GetNumGuildMembers()
-			DebugPrint("Processing guild roster update. Number of members: " .. numGuildMembers)
+			-- Get the total and online guild members
+			local numTotalGuildMembers, numOnlineGuildMembers = GetNumGuildMembers()
+			DebugPrint(string_format("Guild Roster: Total Members = %d, Online Members = %d", numTotalGuildMembers, numOnlineGuildMembers))
 
-			for i = 1, numGuildMembers do
-				local fullName, _, _, level, classDisplayName, _, _, _, isOnline, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+			-- Exit early if the player is the only guild member online
+			if numOnlineGuildMembers == 1 then
+				local firstOnlineMemberName = Ambiguate(GetGuildRosterInfo(1), "short") -- Assuming the first member is the player
+				if firstOnlineMemberName == UnitName("player") then
+					DebugPrint("Player is the only guild member online. Exiting GUILD_ROSTER_UPDATE handler.")
+					return
+				end
+			end
+
+			-- Process guild members
+			for i = 1, numTotalGuildMembers do
+				local fullName, _, _, level, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
 				local playerName = Ambiguate(fullName, "short") -- Strip realm name
 
 				if guid then
-					local localizedClass, englishClass, localizedRace, englishRace, sex, name, realm = GetPlayerInfoByGUID(guid)
+					local localizedClass, _, localizedRace, _, sex = GetPlayerInfoByGUID(guid)
 					if localizedRace and sex then
 						memberData[playerName] = {
 							race = localizedRace, -- Localized race name
@@ -237,7 +262,7 @@ namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
 							level = level,
 							sex = sex,
 						}
-						DebugPrint(string.format("Guild member: %s - Race: %s - Class: %s - Level: %s - Gender: %s", playerName, localizedRace, localizedClass, level, (sex == 2 and "Male" or "Female")))
+						DebugPrint(string_format("Guild member: %s - Race: %s - Class: %s - Level: %s - Gender: %s", playerName, localizedRace, localizedClass, level, (sex == 2 and "Male" or "Female")))
 					else
 						DebugPrint("Failed to retrieve race or gender for GUID: " .. guid)
 					end
@@ -249,7 +274,7 @@ namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
 	end)
 end)
 
-namespace:RegisterEvent("UNIT_LEVEL", function(event, unit)
+namespace:RegisterEvent("UNIT_LEVEL", function(_, unit)
 	if not unit or not UnitExists(unit) then
 		DebugPrint("UNIT_LEVEL event fired, but unit does not exist.")
 		return
@@ -279,8 +304,8 @@ namespace:RegisterEvent("UNIT_LEVEL", function(event, unit)
 	end)
 end)
 
-namespace:RegisterEvent("PLAYER_LEVEL_UP", function(event, level, healthDelta, powerDelta, numNewTalents, numNewPvpTalentSlots, strengthDelta, agilityDelta, staminaDelta, intellectDelta)
-	DebugPrint(string.format("PLAYER_LEVEL_UP fired! New Level: %d, Health Gained: %d, Power Gained: %d", level, healthDelta, powerDelta))
+namespace:RegisterEvent("PLAYER_LEVEL_UP", function(_, level, healthDelta, powerDelta)
+	DebugPrint(string_format("PLAYER_LEVEL_UP fired! New Level: %d, Health Gained: %d, Power Gained: %d", level, healthDelta, powerDelta))
 
 	-- Update the player's level in memberData
 	local playerName = UnitName("player")
@@ -302,14 +327,14 @@ namespace:RegisterEvent("PLAYER_LEVEL_UP", function(event, level, healthDelta, p
 end)
 
 -- Handle PLAYER_LEVEL_CHANGED
-namespace:RegisterEvent("PLAYER_LEVEL_CHANGED", function(event, oldLevel, newLevel, real)
+namespace:RegisterEvent("PLAYER_LEVEL_CHANGED", function(_, oldLevel, newLevel, real)
 	local playerName = UnitName("player")
 	if playerName and memberData[playerName] then
 		-- Update player's level in memberData
 		memberData[playerName].level = newLevel
 
 		-- Debugging output
-		DebugPrint(string.format("Player level changed: %s - Old Level: %d, New Level: %d, Real: %s", playerName, oldLevel, newLevel, tostring(real)))
+		DebugPrint(string_format("Player level changed: %s - Old Level: %d, New Level: %d, Real: %s", playerName, oldLevel, newLevel, tostring(real)))
 	else
 		DebugPrint("PLAYER_LEVEL_CHANGED fired, but player data is not found.")
 	end
