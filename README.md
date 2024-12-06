@@ -1,4 +1,5 @@
 # ChatIdentity
+## Retail and Classic Supported!
 
 ![{3D1ADA94-DB2B-4B2F-B1C3-E76C97414AD9}](https://github.com/user-attachments/assets/4240fa4d-ee38-4a49-a63d-4ff1f4f63470)   
 ![{28844001-9D0F-46B7-82EC-8690F92FAFEE}](https://github.com/user-attachments/assets/4181e073-1207-460b-a075-204608e9ac12)   
