@@ -210,6 +210,12 @@ end)
 
 namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
 	namespace:Defer(function()
+		-- Exit early if the player is not in a guild
+		if not IsInGuild() then
+			DebugPrint("Player is not in a guild. Exiting GUILD_ROSTER_UPDATE handler.")
+			return
+		end
+
 		local now = GetTime()
 		if now - lastGuildRosterUpdate >= 10 then
 			C_GuildInfo.GuildRoster()
@@ -244,24 +250,83 @@ namespace:RegisterEvent("GUILD_ROSTER_UPDATE", function()
 end)
 
 namespace:RegisterEvent("UNIT_LEVEL", function(event, unit)
+	if not unit or not UnitExists(unit) then
+		DebugPrint("UNIT_LEVEL event fired, but unit does not exist.")
+		return
+	end
+
 	namespace:Defer(function()
-		if UnitInParty(unit) or UnitInRaid(unit) then
+		-- Only process if the unit is part of the player's party
+		if UnitInParty(unit) then
 			local name = UnitName(unit)
 			local level = UnitLevel(unit)
-			if memberData[name] and memberData[name].level ~= level then
-				memberData[name].level = level
-				DebugPrint("Updated level for " .. name .. ": " .. level)
+
+			if name and level then
+				DebugPrint("UNIT_LEVEL fired for party member: " .. name .. ", Level: " .. level)
+				-- Update level in memberData if it has changed
+				if memberData[name] and memberData[name].level ~= level then
+					memberData[name].level = level
+					DebugPrint("Updated level for " .. name .. ": " .. level)
+				else
+					DebugPrint("No changes required for " .. name)
+				end
+			else
+				DebugPrint("UNIT_LEVEL fired but no valid name or level for unit.")
 			end
+		else
+			DebugPrint("UNIT_LEVEL ignored for unit not in party: " .. tostring(UnitName(unit)))
 		end
 	end)
 end)
 
+namespace:RegisterEvent("PLAYER_LEVEL_UP", function(event, level, healthDelta, powerDelta, numNewTalents, numNewPvpTalentSlots, strengthDelta, agilityDelta, staminaDelta, intellectDelta)
+	DebugPrint(string.format("PLAYER_LEVEL_UP fired! New Level: %d, Health Gained: %d, Power Gained: %d", level, healthDelta, powerDelta))
+
+	-- Update the player's level in memberData
+	local playerName = UnitName("player")
+	if memberData[playerName] then
+		memberData[playerName].level = level
+		DebugPrint("Updated player's level: " .. playerName .. " to Level: " .. level)
+	else
+		DebugPrint("Player data not found in memberData; initializing.")
+		memberData[playerName] = {
+			race = UnitRace("player"),
+			class = UnitClass("player"),
+			level = level,
+			sex = UnitSex("player"),
+		}
+	end
+
+	-- Optional: Perform additional updates or display messages
+	namespace:Print("Congratulations on reaching level " .. level .. "!")
+end)
+
+-- Handle PLAYER_LEVEL_CHANGED
+namespace:RegisterEvent("PLAYER_LEVEL_CHANGED", function(event, oldLevel, newLevel, real)
+	local playerName = UnitName("player")
+	if playerName and memberData[playerName] then
+		-- Update player's level in memberData
+		memberData[playerName].level = newLevel
+
+		-- Debugging output
+		DebugPrint(string.format("Player level changed: %s - Old Level: %d, New Level: %d, Real: %s", playerName, oldLevel, newLevel, tostring(real)))
+	else
+		DebugPrint("PLAYER_LEVEL_CHANGED fired, but player data is not found.")
+	end
+end)
+
 namespace:RegisterEvent("GROUP_ROSTER_UPDATE", function()
 	namespace:Defer(function()
+		-- Exit early if the player is not in a group or is in a raid
+		if not IsInGroup() or IsInRaid() then
+			DebugPrint("Player is either not in a group or is in a raid. Exiting GROUP_ROSTER_UPDATE handler.")
+			return
+		end
+
 		DebugPrint("Group roster updated")
 		local numGroupMembers = GetNumGroupMembers()
 		for i = 1, numGroupMembers do
-			local unit = IsInRaid() and "raid" .. i or "party" .. i
+			local unit = "party" .. i
 			if UnitExists(unit) then
 				local name = UnitName(unit)
 				local race = UnitRace(unit)
